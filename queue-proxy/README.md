@@ -73,9 +73,15 @@ testing against the public URL you can use `https://superstackai-gateway.fly.dev
 4. Rollback: redeploy LiteLLM to the public app name.
 
 ## Status / roadmap
+See **`TEST_RESULTS.md`** for live + deterministic results (all on the
+self-hosted model) and **`REDIS.md`** for the Redis finding + HA plan.
+
 - **v1 (this):** in-process state on a **single replica** (Fly keeps 1 machine).
   Queue + counters live in memory; `uuid` futures signal handlers. This is the
   simplest correct version for one machine.
+- **Budget note:** this LiteLLM build returns **422 `budget_exceeded`** (not 429)
+  and bypasses budget checks for **zero-cost** models; the proxy requires a
+  non-zero model cost and requeues/pauses on any `budget_exceeded` response.
 - **P4 (next):** move queues/counters to **Redis** (reuse `REDIS_URL` or a
   dedicated Redis with **AOF + `noeviction`**) for durability + multi-replica
   **HA** (needs Redis pub/sub for cross-replica grant signaling). Do **not**

@@ -28,6 +28,11 @@ class Settings:
     default_key_rpm: int = int(os.getenv("DEFAULT_KEY_RPM", "60"))
     default_user_rpm: int = int(os.getenv("DEFAULT_USER_RPM", "0"))  # 0 = unlimited
 
+    # Test-mode overrides (0 = disabled): force limits regardless of LiteLLM,
+    # useful with a short WINDOW_SECONDS to exercise the queue quickly.
+    force_user_rpm: int = int(os.getenv("FORCE_USER_RPM", "0"))
+    force_key_rpm: int = int(os.getenv("FORCE_KEY_RPM", "0"))
+
     # Only these paths are queued; everything else is proxied straight through.
     inference_paths: tuple[str, ...] = field(
         default_factory=lambda: _csv(

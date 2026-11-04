@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections import defaultdict
+from collections import defaultdict, deque
 
 from .auth import auth
 from .config import settings
@@ -20,11 +20,12 @@ class UserScheduler:
             lambda: WindowCounter(settings.window_seconds)
         )
         self.key_rpm: dict[str, int] = {}
-        self.user_rpm: int = settings.default_user_rpm
+        self.user_rpm: int = settings.force_user_rpm or settings.default_user_rpm
         self.budget_blocked = False
         self.cooldown_until = 0.0
         self._task: asyncio.Task | None = None
         self._last_user_refresh = 0.0
+        self.recent: deque = deque(maxlen=100)  # (timestamp, key_id) of grants
 
     # -- lifecycle ---------------------------------------------------------
     def start(self) -> None:
@@ -34,7 +35,7 @@ class UserScheduler:
     # -- public API --------------------------------------------------------
     async def submit(self, job: Job, key_info: KeyInfo) -> None:
         async with self.lock:
-            self.key_rpm[job.key_id] = key_info.rpm_limit
+            self.key_rpm[job.key_id] = settings.force_key_rpm or key_info.rpm_limit
             self.state.enqueue(job)
         self.start()
 
@@ -48,6 +49,11 @@ class UserScheduler:
             await asyncio.wait_for(job.grant, timeout=remaining)
         except asyncio.TimeoutError as e:
             raise TimeoutError("queue wait exceeded MAX_WAIT") from e
+
+    def mark_budget_blocked(self) -> None:
+        """Stop granting for this user until the next budget refresh says otherwise."""
+        self.budget_blocked = True
+        self._last_user_refresh = 0.0
 
     async def requeue(self, job: Job, key_info: KeyInfo, cooldown: float = 0.0) -> None:
         """Put a job back (e.g. after an upstream 429) and wait again."""
@@ -75,7 +81,9 @@ class UserScheduler:
         info = await auth.user(self.user_id, force=True)
         if info is None:
             return
-        if info.rpm_limit:
+        if settings.force_user_rpm:
+            self.user_rpm = settings.force_user_rpm
+        elif info.rpm_limit:
             self.user_rpm = info.rpm_limit
         if info.max_budget is None:
             self.budget_blocked = False
@@ -122,6 +130,7 @@ class UserScheduler:
                             continue
                         self.user_window.hit()
                         self.key_windows[job.key_id].hit()
+                        self.recent.append((round(time.time(), 3), job.key_id))
                         if job.grant and not job.grant.done():
                             job.grant.set_result(None)
 

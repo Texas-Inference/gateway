@@ -63,6 +63,7 @@ async def stats() -> dict:
                     }
                     for k in s.state.order
                 },
+                "recent_grants": list(s.recent),
             }
             for uid, s in schedulers._users.items()
         }
@@ -132,6 +133,21 @@ async def _handle_inference(request: Request, path: str, body: bytes):
                     await resp.aclose()
                     await scheduler.requeue(job, key_info, cooldown=retry_after or 5.0)
                     continue
+                if resp.status_code not in (200, 201):
+                    body_read = await resp.aread()
+                    if _is_budget_exceeded(resp.status_code, body_read):
+                        await resp.aclose()
+                        scheduler.mark_budget_blocked()
+                        await scheduler.requeue(job, key_info, cooldown=settings.budget_poll_seconds)
+                        continue
+                    headers = _resp_headers(resp)
+                    await resp.aclose()
+                    return Response(
+                        content=body_read,
+                        status_code=resp.status_code,
+                        headers=headers,
+                        media_type=resp.headers.get("content-type"),
+                    )
                 headers = _resp_headers(resp)
 
                 async def relay(r=resp):
@@ -149,6 +165,10 @@ async def _handle_inference(request: Request, path: str, body: bytes):
             if resp.status_code == 429:
                 retry_after = _retry_after(resp)
                 await scheduler.requeue(job, key_info, cooldown=retry_after or 5.0)
+                continue
+            if _is_budget_exceeded(resp.status_code, resp.content):
+                scheduler.mark_budget_blocked()
+                await scheduler.requeue(job, key_info, cooldown=settings.budget_poll_seconds)
                 continue
             return Response(
                 content=resp.content,
@@ -168,6 +188,14 @@ def _retry_after(resp: httpx.Response) -> float | None:
         return float(ra)
     except ValueError:
         return None
+
+
+def _is_budget_exceeded(status: int, body: bytes) -> bool:
+    """LiteLLM may report budget exhaustion as 400/422/429 with a budget_exceeded body."""
+    if status not in (400, 402, 422, 429):
+        return False
+    text = body.lower()
+    return b"budget_exceeded" in text or b"budget has been exceeded" in text
 
 
 @app.api_route(

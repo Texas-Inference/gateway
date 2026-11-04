@@ -23,7 +23,11 @@ LiteLLM (Fly) ── https://ds.example.com/v1 ──▶ cloudflared ──▶ S
 | `test-connection.sh` | Walks GPU -> tunnel -> gateway and reports each hop |
 | `.env.example` | Profiles: `prod` (V4.1) / `dryrun` (V4-Flash) / `tiny` (script test) |
 | `recipe.md` | **Pinned SGLang configs** (B300 4x TP4·EP4 + DSpark; T4 tiny) |
+| `cutover.md` | Repoint `kimi3`/`deepseek-v3` to the GPU (with rollback) |
+| `usage-check.sh` | Flag traffic still hitting old upstreams (SiliconFlow/Zen) |
+| `check-cuda.sh` | Pre-flight gate: verify driver CUDA before installing |
 | `runpod.md` | Rented-GPU runs: cheap smoke -> dry run -> prod |
+| `vast.md` | Vast.ai cheatsheet (no nested Docker -> `RUNTIME=bare`) |
 | `handoff.md` | Working with the colleague who rents the GPU (you SSH + run it) |
 | `cloudflared/` | **Plan B (active):** expose SGLang via Cloudflare Tunnel |
 | `litellm-integration.md` | Add/repoint the model entry (Tailscale/relay version) |
