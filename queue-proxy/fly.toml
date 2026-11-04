@@ -1,0 +1,25 @@
+# Dev app. At cutover this process takes over the public app name so the URL
+# https://superstackai-gateway.fly.dev stays the same (LiteLLM moves internal).
+app = 'superstackai-queue'
+primary_region = 'iad'
+
+[build]
+
+[env]
+  # Dev: forward to the public LiteLLM. At cutover this becomes the private
+  # internal LiteLLM URL (e.g. http://superstackai-gateway-litellm.internal:4000).
+  LITELLM_BASE_URL = 'https://superstackai-gateway.fly.dev'
+  MAX_WAIT_SECONDS = '120'
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'off'
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ['app']
+
+[[vm]]
+  memory = '512mb'
+  cpu_kind = 'shared'
+  cpus = 1
